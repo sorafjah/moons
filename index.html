@@ -212,13 +212,16 @@ function setCamera(){
     orbit.visible = true;
     earth.visible = true;
   } else {
-    // 日本（北緯35°）から月を見上げる構図（透視投影）
+    // 日本（北緯35°）の地表から月を見上げる構図（透視投影）
     camera = perspCam;
     const obsDir = observerDirFor(angle);
-    const obsPos = obsDir.clone().multiplyScalar(1.4);
-    const camPos = obsPos.clone().add(obsDir.clone().multiplyScalar(0.6));
+    const obsPos = obsDir.clone().multiplyScalar(1.4); // 地表の観測点
+    // カメラは観測点よりやや地球中心寄り＆低い位置に置き、上方の月を見上げる
+    const camPos = obsPos.clone()
+      .add(obsDir.clone().multiplyScalar(-0.25))      // 少し地球中心寄り（後ろ）に下がる
+      .add(new THREE.Vector3(0, -1.6, 0));            // 下げて月を見上げる角度をつくる
     camera.position.copy(camPos);
-    camera.up.copy(new THREE.Vector3(0,1,0)); // 地球の北極方向 = 画面の上
+    camera.up.copy(new THREE.Vector3(0,1,0)); // 北極方向 = 画面の上
     camera.lookAt(mp);
     orbit.visible = false;
     earth.visible = false;
