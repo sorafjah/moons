@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>月の満ち欠け 3D</title>
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --panel: #141b2e;
+    --accent: #ffd34d;
+    --text: #eef2ff;
+    --sub: #9fb0d8;
+    --line: #2a3550;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: "BIZ UDPGothic", "BIZ UDゴシック", system-ui, sans-serif;
+    overflow: hidden;
+  }
+  #app { position: fixed; inset: 0; display: flex; flex-direction: column; }
+  #canvas-wrap { flex: 1; position: relative; min-height: 0; }
+  canvas { display: block; width: 100%; height: 100%; }
+
+  .badge {
+    position: absolute; top: calc(12px + env(safe-area-inset-top)); left: 12px;
+    background: rgba(20,27,46,0.82); border: 1px solid var(--line);
+    border-radius: 12px; padding: 8px 14px;
+    font-size: 15px; font-weight: 700; letter-spacing: .02em;
+  }
+  .badge .sub { font-size: 12px; font-weight: 500; color: var(--sub); display:block; margin-top:2px; }
+
+  .view-toggle {
+    position: absolute; top: calc(12px + env(safe-area-inset-top)); right: 12px;
+    background: #000; color: #fff;
+    border: 1px solid #333; border-radius: 12px; padding: 10px 16px;
+    font-size: 14px; font-weight: 800; cursor: pointer;
+    font-family: inherit;
+  }
+  .view-toggle:active { transform: scale(.96); }
+
+  .sun-label {
+    position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+    color: var(--accent); font-size: 13px; font-weight: 700; text-align: center;
+    pointer-events: none; line-height: 1.3; opacity:.85;
+  }
+  .sun-label .arrow { font-size: 22px; display:block; }
+
+  #controls {
+    background: var(--panel); border-top: 1px solid var(--line);
+    padding: 14px 14px calc(12px + env(safe-area-inset-bottom));
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  #slider {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 8px;
+    border-radius: 6px; background: linear-gradient(90deg, #15294d, #3a7bd5);
+    outline: none; margin: 0;
+  }
+  #slider::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 28px; height: 28px; border-radius: 50%;
+    background: #3a7bd5; border: 3px solid #0a1a33; cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,.4);
+  }
+  #slider::-moz-range-thumb {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: #3a7bd5; border: 3px solid #0a1a33; cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="canvas-wrap">
+    <div class="badge" id="badge">新月<span class="sub" id="badge-sub">上から見た図</span></div>
+    <button class="view-toggle" id="viewBtn">地球から見る</button>
+    <div class="sun-label" id="sunLabel"><span class="arrow">←</span>太陽<br>（光）</div>
+  </div>
+  <div id="controls">
+    <input type="range" id="slider" min="0" max="360" value="0" step="1">
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.module.min.js" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+const wrap = document.getElementById('canvas-wrap');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0e1a);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+wrap.appendChild(renderer.domElement);
+
+// 地球視点用（透視投影）
+const perspCam = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
+// 俯瞰用（正射影：距離で大きさが変わらない）
+const orthoCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000);
+let camera = orthoCam;
+
+// ---- 太陽の光：右(+X)から真横に当たる平行光 ----
+const sunLight = new THREE.DirectionalLight(0xffffff, 2.2);
+sunLight.position.set(50, 0, 0);   // 真右
+sunLight.target.position.set(0, 0, 0);
+scene.add(sunLight);
+scene.add(sunLight.target);
+scene.add(new THREE.AmbientLight(0x223052, 0.5));
+
+// ---- 地球 ----
+const earth = new THREE.Mesh(
+  new THREE.SphereGeometry(1.4, 48, 48),
+  new THREE.MeshStandardMaterial({ color: 0x3a7bd5, roughness: 0.85, emissive: 0x0a1530, emissiveIntensity: .4 })
+);
+scene.add(earth);
+
+// ---- 月 ----
+const moonRadius = 0.55;
+const moon = new THREE.Mesh(
+  new THREE.SphereGeometry(moonRadius, 48, 48),
+  new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 1.0 })
+);
+scene.add(moon);
+
+// 月の軌道リング（俯瞰時のガイド）
+const orbitR = 5.0;
+const orbit = new THREE.Mesh(
+  new THREE.RingGeometry(orbitR - 0.02, orbitR + 0.02, 96),
+  new THREE.MeshBasicMaterial({ color: 0x2a3550, side: THREE.DoubleSide })
+);
+orbit.rotation.x = -Math.PI / 2;
+scene.add(orbit);
+
+// 星
+const starGeo = new THREE.BufferGeometry();
+const starPos = [];
+for (let i=0;i<400;i++){
+  starPos.push((Math.random()-0.5)*120,(Math.random()-0.5)*120,(Math.random()-0.5)*120);
+}
+starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos,3));
+scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({color:0x8899bb,size:0.18})));
+
+// ---- フェーズ定義 ----
+// 太陽は右(+X)。月の位置を軌道上に置く。
+// 新月: 太陽側(右, +X)  / 満月: 反対側(左, -X)
+// 上弦: 手前 or 奥。地球から見て右半分が光る → 月は -Z 側、観測者が見ると右が光る
+// 月の角度: 0=右(+X,新月), 180=左(-X,満月)
+let angle = 0;   // 0=新月, 90=上弦, 180=満月, 270=下弦（連続値）
+let mode = 'top'; // 'top' or 'earth'
+
+// 角度から月相名を求める（4つの位置の近くだけ表示、それ以外は空欄）
+function phaseName(a){
+  a = ((a % 360) + 360) % 360;
+  const W = 11; // 表示する角度の許容幅（±W度）
+  if (a < W || a >= 360-W) return '新月';
+  if (Math.abs(a-90)  < W) return '上弦の月';
+  if (Math.abs(a-180) < W) return '満月';
+  if (Math.abs(a-270) < W) return '下弦の月';
+  return '';
+}
+
+// 観測者位置（地球上、北緯35°=日本付近）を地球中心からの単位ベクトルで表す。
+// 緯度φ=35°、経度方向は赤道面内で太陽と反対側（夜側）寄りに固定し、
+// 月の見える方向に合わせて緯度円上の経度成分のみ角度に追従させる。
+const LAT = 35 * Math.PI/180; // 北緯35度
+
+function observerDirFor(angleDeg){
+  const a = angleDeg * Math.PI/180;
+  // 月と同じ経度方向（XZ平面内の月方向）に立ち、北緯35°の高さを持つ
+  const horiz = new THREE.Vector3(Math.cos(a), 0, -Math.sin(a));
+  const dir = new THREE.Vector3(
+    horiz.x * Math.cos(LAT),
+    Math.sin(LAT),
+    horiz.z * Math.cos(LAT)
+  );
+  return dir.normalize();
+}
+
+function moonPosFor(angleDeg){
+  const a = angleDeg * Math.PI/180;
+  // +X方向(右)を新月(太陽側)とする。XZ平面上の円。
+  return new THREE.Vector3(Math.cos(a)*orbitR, 0, -Math.sin(a)*orbitR);
+}
+
+function updateScene(){
+  const mp = moonPosFor(angle);
+  moon.position.copy(mp);
+
+  // バッジ（4つの位置だけ表示、それ以外は非表示）
+  const name = phaseName(angle);
+  const badge = document.getElementById('badge');
+  if(name){
+    badge.style.display = '';
+    badge.firstChild.textContent = name;
+    document.getElementById('badge-sub').textContent = mode==='top' ? '上から見た図' : '地球から見た月';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function setCamera(){
+  const mp = moonPosFor(angle);
+  if(mode==='top'){
+    // 真上からの俯瞰（正射影：距離で大きさが変わらない）
+    camera = orthoCam;
+    camera.position.set(0, 13, 0.001);
+    camera.up.set(0,0,-1);
+    camera.lookAt(0,0,0);
+    orbit.visible = true;
+    earth.visible = true;
+  } else {
+    // 日本（北緯35°）から月を見上げる構図（透視投影）
+    camera = perspCam;
+    const obsDir = observerDirFor(angle);
+    const obsPos = obsDir.clone().multiplyScalar(1.4);
+    const camPos = obsPos.clone().add(obsDir.clone().multiplyScalar(0.6));
+    camera.position.copy(camPos);
+    camera.up.copy(new THREE.Vector3(0,1,0)); // 地球の北極方向 = 画面の上
+    camera.lookAt(mp);
+    orbit.visible = false;
+    earth.visible = false;
+  }
+  updateCamProjection();
+}
+
+function updateCamProjection(){
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  const aspect = w/h;
+  if(camera === orthoCam){
+    const viewSize = 14; // 表示する世界の縦幅
+    orthoCam.left = -viewSize*aspect/2;
+    orthoCam.right = viewSize*aspect/2;
+    orthoCam.top = viewSize/2;
+    orthoCam.bottom = -viewSize/2;
+    orthoCam.updateProjectionMatrix();
+  } else {
+    perspCam.aspect = aspect;
+    perspCam.updateProjectionMatrix();
+  }
+}
+
+// ---- イベント ----
+const slider = document.getElementById('slider');
+function setAngle(a){
+  angle = ((a % 360) + 360) % 360;  // 0〜360でラップ
+  slider.value = angle;
+  updateScene(); setCamera();
+}
+slider.addEventListener('input', ()=>{
+  setAngle(parseInt(slider.value));
+});
+
+const viewBtn = document.getElementById('viewBtn');
+viewBtn.addEventListener('click', ()=>{
+  mode = mode==='top' ? 'earth' : 'top';
+  viewBtn.textContent = mode==='top' ? '地球から見る' : '上から見る';
+  updateScene(); setCamera();
+});
+
+// ---- 月を直接ドラッグして公転させる（俯瞰時のみ）----
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+let dragging = false;
+
+function pointerToNDC(e){
+  const rect = renderer.domElement.getBoundingClientRect();
+  const cx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+  const cy = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+  pointer.x = (cx / rect.width) * 2 - 1;
+  pointer.y = -(cy / rect.height) * 2 + 1;
+  return { cx, cy, rect };
+}
+
+// 画面座標から軌道角を求める（俯瞰：真上から見たXZ平面）
+function angleFromPointer(e){
+  const { cx, cy, rect } = pointerToNDC(e);
+  // 正射影・真上視点では、画面中心が原点。
+  // 画面右(+x)=ワールド+X、画面上(-y_screen)=ワールド-Z(カメラupが-Z)
+  const dx = (cx / rect.width) * 2 - 1;          // -1..1 画面右が正
+  const dy = -((cy / rect.height) * 2 - 1);      // -1..1 画面上が正
+  // ワールドX = dx方向, ワールドZ: 画面上方向がカメラup=-Z なので 画面上(dy+)= -Z
+  const worldX = dx;
+  const worldZ = -dy;
+  // moonPosFor: x=cos(a), z=-sin(a) → a = atan2(-z, x)
+  let a = Math.atan2(-worldZ, worldX) * 180/Math.PI;
+  return a;
+}
+
+function onDown(e){
+  if(mode !== 'top') return;
+  pointerToNDC(e);
+  raycaster.setFromCamera(pointer, camera);
+  const hit = raycaster.intersectObject(moon);
+  if(hit.length > 0){
+    dragging = true;
+    e.preventDefault();
+  }
+}
+function onMove(e){
+  if(!dragging) return;
+  e.preventDefault();
+  setAngle(angleFromPointer(e));
+}
+function onUp(){ dragging = false; }
+
+const cv = renderer.domElement;
+cv.addEventListener('mousedown', onDown);
+window.addEventListener('mousemove', onMove);
+window.addEventListener('mouseup', onUp);
+cv.addEventListener('touchstart', onDown, { passive:false });
+cv.addEventListener('touchmove', onMove, { passive:false });
+window.addEventListener('touchend', onUp);
+
+function resize(){
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  renderer.setSize(w,h);
+  updateCamProjection();
+}
+window.addEventListener('resize', resize);
+
+function animate(){
+  requestAnimationFrame(animate);
+  renderer.render(scene, camera);
+}
+resize(); updateScene(); setCamera(); animate();
+</script>
+</body>
+</html>
