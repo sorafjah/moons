@@ -2,408 +2,539 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>月の満ち欠け 3D</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>地球・月・太陽の大きさと距離</title>
 <style>
-  :root {
-    --bg: #0a0e1a;
-    --panel: #141b2e;
-    --accent: #ffd34d;
-    --text: #eef2ff;
-    --sub: #9fb0d8;
-    --line: #2a3550;
+  * { margin:0; padding:0; box-sizing:border-box; }
+  @font-face {
+    font-family: 'BIZ UDGothic';
+    src: local('BIZ UDGothic');
   }
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
-    margin: 0; padding: 0; height: 100%;
-    background: var(--bg); color: var(--text);
-    font-family: "BIZ UDPGothic", "BIZ UDゴシック", system-ui, sans-serif;
-    overflow: hidden;
+    width:100%; height:100%; overflow:hidden;
+    font-family: 'BIZ UDGothic', 'Hiragino Sans', 'Meiryo', sans-serif;
+    background: #000;
+    color:#fff;
   }
-  #app { position: fixed; inset: 0; display: flex; flex-direction: column; }
-  #canvas-wrap { flex: 1; position: relative; min-height: 0; }
-  canvas { display: block; width: 100%; height: 100%; }
+  #container { position:relative; width:100vw; height:100vh; }
+  canvas { display:block; }
 
-  .badge {
-    position: absolute; top: calc(12px + env(safe-area-inset-top)); left: 12px;
-    background: rgba(20,27,46,0.82); border: 1px solid var(--line);
-    border-radius: 12px; padding: 8px 14px;
-    font-size: 15px; font-weight: 700; letter-spacing: .02em;
+  /* 上部パネル */
+  #topPanel {
+    position:absolute; top:0; left:0; right:0;
+    padding: 12px 16px;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.75), rgba(0,0,0,0));
+    z-index: 10;
+    display:flex; flex-wrap:wrap; gap:10px; align-items:center;
   }
-  .badge .sub { font-size: 12px; font-weight: 500; color: var(--sub); display:block; margin-top:2px; }
-
-  .sun-label {
-    position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
-    color: var(--accent); font-size: 13px; font-weight: 700; text-align: center;
-    pointer-events: none; line-height: 1.3; opacity:.85;
+  #objToggles, #modeButtons {
+    display:flex; flex-wrap:wrap; gap:10px; align-items:center;
   }
-  .sun-label .arrow { font-size: 22px; display:block; }
-
-  /* ---- ワイプ（PinP）：両方見るモードで右上に表示 ---- */
-  .pip {
-    position: absolute; top: calc(12px + env(safe-area-inset-top)); right: 12px;
-    width: 34%; max-width: 220px; max-height: 32vh; aspect-ratio: 1 / 1;
-    border-radius: 14px; overflow: hidden;
-    border: 1px solid var(--line);
-    background: #05070f;
-    box-shadow: 0 4px 18px rgba(0,0,0,.5);
-    visibility: hidden;
-    transition: opacity .15s ease;
+  .sizeOnly.hidden { display:none; }
+  #modeButtons { margin-left: auto; }
+  h1 {
+    font-size: 1.1rem;
+    font-weight: bold;
+    margin-right: auto;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
   }
-  .pip.show { visibility: visible; }
-  .pip canvas { display:block; width:100%; height:100%; }
-  .pip-label {
-    position: absolute; top: 6px; left: 8px; right: 8px;
-    font-size: 11px; font-weight: 700; color: var(--sub);
-    background: rgba(10,14,26,0.65); padding: 3px 8px; border-radius: 8px;
-    pointer-events: none; text-align: center;
-  }
-
-  #controls {
-    padding: 14px 14px calc(12px + env(safe-area-inset-bottom));
-    display: flex; flex-direction: column; gap: 12px;
-  }
-  .view-controls {
-    display: flex; justify-content: center; align-items: center; gap: 10px;
-  }
-  .view-toggle, .reset-btn {
-    background: #000; color: #fff;
-    border: 1px solid #333; border-radius: 12px; padding: 10px 18px;
-    font-size: 14px; font-weight: 800; cursor: pointer;
+  .modeBtn {
     font-family: inherit;
+    font-size: 0.85rem;
+    padding: 6px 14px;
+    border-radius: 18px;
+    border: 1px solid #555;
+    background: rgba(30,30,40,0.85);
+    color: #fff;
+    cursor: pointer;
+    transition: all 0.2s;
+    touch-action: manipulation;
   }
-  .view-toggle:active, .reset-btn:active { transform: scale(.96); }
+  .modeBtn.active {
+    background: rgba(30,30,40,0.85);
+    border-color: #8fc4ff;
+    font-weight: bold;
+  }
+  .modeBtn:hover { border-color: #8fc4ff; }
 
-  #slider {
-    -webkit-appearance: none; appearance: none; width: 100%; height: 8px;
-    border-radius: 6px; background: linear-gradient(90deg, #15294d, #3a7bd5);
-    outline: none; margin: 0;
+  /* オブジェクト表示切替チップ */
+  .toggleChip {
+    font-family: inherit;
+    font-size: 0.85rem;
+    padding: 6px 14px;
+    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,0.3);
+    background: rgba(20,20,28,0.5);
+    color: rgba(255,255,255,0.6);
+    cursor: pointer;
+    transition: all 0.2s;
+    touch-action: manipulation;
   }
-  #slider::-webkit-slider-thumb {
-    -webkit-appearance: none; appearance: none;
-    width: 16px; height: 16px; border-radius: 50%;
-    background: #3a7bd5; border: 2px solid #0a1a33; cursor: pointer;
-    box-shadow: 0 1px 4px rgba(0,0,0,.35);
+  .toggleChip.active {
+    background: rgba(95,174,95,0.25);
+    border-color: #8fc4ff;
+    color: #fff;
+    font-weight: bold;
   }
-  #slider::-moz-range-thumb {
-    width: 16px; height: 16px; border-radius: 50%;
-    background: #3a7bd5; border: 2px solid #0a1a33; cursor: pointer;
+  .toggleChip:hover { border-color: #8fc4ff; }
+
+  /* 説明パネル */
+  #infoPanel {
+    position:absolute; bottom:0; left:0; right:0;
+    padding: 14px 16px 18px;
+    background: linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0));
+    z-index: 10;
+    font-size: 0.95rem;
+    line-height: 1.6;
+  }
+  #infoPanel .title {
+    font-weight: bold;
+    font-size: 1.05rem;
+    margin-bottom: 6px;
+    color: #ffd966;
+  }
+  #infoPanel .title.distance {
+    color: #6fb3ff;
+  }
+  .dataRow {
+    display:flex; flex-wrap:wrap; gap: 14px;
+    margin-top: 6px;
+  }
+  .dataItem {
+    background: rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 6px 12px;
+    font-size: 0.85rem;
+  }
+  .dataItem b { color:#9fd8ff; }
+
+  /* 操作説明 */
+  #hint {
+    position:absolute;
+    bottom: 50%;
+    left: 50%;
+    transform: translate(-50%, 50%);
+    background: rgba(0,0,0,0.6);
+    padding: 14px 22px;
+    border-radius: 14px;
+    font-size: 0.95rem;
+    text-align:center;
+    z-index: 20;
+    pointer-events:none;
+    transition: opacity 1s;
+  }
+  #hint.hidden { opacity: 0; }
+
+  /* ローディング */
+  #loading {
+    position:absolute; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    background:#000; z-index:100;
+    font-size:1.1rem;
   }
 </style>
 </head>
 <body>
-<div id="app">
-  <div id="canvas-wrap">
-    <div class="badge" id="badge">新月<span class="sub" id="badge-sub">俯瞰視点</span></div>
-    <div class="sun-label" id="sunLabel"><span class="arrow">←</span>太陽<br>（光）</div>
-    <div class="pip" id="pip">
-      <div class="pip-label">地球から見た月</div>
-      <canvas id="pip-canvas"></canvas>
+<div id="container">
+  <div id="loading">読み込み中…</div>
+
+  <div id="topPanel">
+    <div id="objToggles">
+      <button class="toggleChip sizeOnly active" data-obj="earth">地球</button>
+      <button class="toggleChip sizeOnly" data-obj="moon">月</button>
+      <button class="toggleChip sizeOnly" data-obj="sun">太陽</button>
+      <button class="toggleChip" data-obj="info">説明</button>
+    </div>
+    <div id="modeButtons">
+      <button class="modeBtn active" id="btnSize">大きさ比較モード</button>
+      <button class="modeBtn" id="btnDistance">距離比較モード</button>
+      <button class="modeBtn" id="btnReset">視点リセット</button>
     </div>
   </div>
-  <div id="controls">
-    <div class="view-controls">
-      <button class="view-toggle" id="viewBtn">地球から見る</button>
-      <button class="reset-btn" id="resetBtn">視点リセット</button>
-    </div>
-    <input type="range" id="slider" min="0" max="360" value="0" step="1">
+
+  <div id="hint">ドラッグで視点回転 / ピンチ・スクロールで拡大縮小</div>
+
+  <div id="infoPanel">
+    <div class="title" id="infoTitle">大きさ比較モード</div>
+    <div id="infoText">地球・月・太陽を実際の大きさの比率のまま、近づけて並べています。</div>
+    <div class="dataRow" id="dataRow"></div>
   </div>
 </div>
 
 <script type="importmap">
-{ "imports": {
-  "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.module.min.js",
-  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-} }
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
 </script>
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+// ============================================================
+// 実際のデータ（km）
+// ============================================================
+const REAL = {
+  earthRadius: 6371,
+  moonRadius: 1737,
+  sunRadius: 696000,
+  earthMoonDist: 384400,
+  earthSunDist: 149600000
+};
 
-const wrap = document.getElementById('canvas-wrap');
+// ============================================================
+// シーン基本構築
+// ============================================================
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0a0e1a);
-
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.01, 1e9);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-wrap.appendChild(renderer.domElement);
+document.getElementById('container').appendChild(renderer.domElement);
 
-// ---- ワイプ（PinP）用レンダラー ----
-const pipWrap = document.getElementById('pip');
-const pipCanvas = document.getElementById('pip-canvas');
-const pipRenderer = new THREE.WebGLRenderer({ antialias: true, canvas: pipCanvas });
-pipRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-const pipCam = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
+// ラベル用CSS2Dレンダラー
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.setSize(window.innerWidth, window.innerHeight);
+labelRenderer.domElement.style.position = 'absolute';
+labelRenderer.domElement.style.top = '0px';
+labelRenderer.domElement.style.pointerEvents = 'none';
+document.getElementById('container').appendChild(labelRenderer.domElement);
 
-const perspCam = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
-const orthoCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000);
-let camera = orthoCam;
-
-// ---- テクスチャ ----
-const texLoader = new THREE.TextureLoader();
-texLoader.setCrossOrigin('anonymous');
-const earthTex = texLoader.load('earth1024.jpg');
-const moonTex  = texLoader.load('moon1024.jpg');
-earthTex.colorSpace = THREE.SRGBColorSpace;
-moonTex.colorSpace  = THREE.SRGBColorSpace;
-
-// ---- 太陽の光：右(+X) ----
-const sunLight = new THREE.DirectionalLight(0xffffff, 2.2);
-sunLight.position.set(50, 0, 0);
-sunLight.target.position.set(0, 0, 0);
-scene.add(sunLight);
-scene.add(sunLight.target);
-scene.add(new THREE.AmbientLight(0x223052, 0.5));
-
-// ---- 地球 ----
-const earth = new THREE.Mesh(
-  new THREE.SphereGeometry(1.4, 48, 48),
-  new THREE.MeshStandardMaterial({ map: earthTex, roughness: 0.85, emissive: 0x0a1530, emissiveIntensity: .25 })
-);
-scene.add(earth);
-
-// ---- 月：潮汐ロックの向き調整用にピボットでくるむ ----
-// moonPivot を地球に向ける。moonMesh 側に「おなじみの面」を出すローカル回転を入れる。
-const moonRadius = 0.55;
-const moonPivot = new THREE.Object3D();
-scene.add(moonPivot);
-const moon = new THREE.Mesh(
-  new THREE.SphereGeometry(moonRadius, 48, 48),
-  new THREE.MeshStandardMaterial({ map: moonTex, roughness: 1.0 })
-);
-moonPivot.add(moon);
-
-// ★ 月テクスチャの向き合わせ
-// moon1024.jpg は「画像の中心(U=0.5)が地球側の正面」になる標準的な等距円筒図法。
-// SphereGeometry はデフォルトで U=0.5 が -Z 方向（経度0°が +Z 側）に来るため、
-// そのままだと画像の左右端（裏側）が地球側を向いてしまう。
-// Y軸回転で、画像中心付近（表側＝ティコ等の高地クレーターを含む面）
-// が地球側（lookAt後のローカル -Z 方向）にくるようにする。
-moon.rotation.set(0, -Math.PI / 2, 0);
-
-const orbitR = 5.0;
-const orbit = new THREE.Mesh(
-  new THREE.RingGeometry(orbitR - 0.02, orbitR + 0.02, 96),
-  new THREE.MeshBasicMaterial({ color: 0x2a3550, side: THREE.DoubleSide })
-);
-orbit.rotation.x = -Math.PI / 2;
-scene.add(orbit);
-
-const starGeo = new THREE.BufferGeometry();
-const starPos = [];
-for (let i=0;i<400;i++){
-  starPos.push((Math.random()-0.5)*120,(Math.random()-0.5)*120,(Math.random()-0.5)*120);
-}
-starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos,3));
-scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({color:0x8899bb,size:0.18})));
-
-let angle = 0;
-let mode = 'top'; // 'top'(俯瞰) | 'earth'(地球から見る) | 'both'(両方見る)
-
-function phaseName(a){
-  a = ((a % 360) + 360) % 360;
-  const W = 11;
-  if (a < W || a >= 360-W) return '新月';
-  if (Math.abs(a-90)  < W) return '上弦の月';
-  if (Math.abs(a-180) < W) return '満月';
-  if (Math.abs(a-270) < W) return '下弦の月';
-  return '';
+function makeLabel(text, below) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  div.style.color = '#ffffff';
+  div.style.fontFamily = "'BIZ UDGothic', 'Hiragino Sans', 'Meiryo', sans-serif";
+  div.style.fontSize = '15px';
+  div.style.fontWeight = 'bold';
+  div.style.background = 'rgba(0,0,0,0.45)';
+  div.style.padding = '2px 8px';
+  div.style.borderRadius = '6px';
+  div.style.whiteSpace = 'nowrap';
+  div.style.transform = below ? 'translate(-50%, 30%)' : 'translate(-50%, -130%)';
+  return new CSS2DObject(div);
 }
 
-const LAT = 35 * Math.PI/180;
-
-function observerDirFor(angleDeg){
-  const a = angleDeg * Math.PI/180;
-  const horiz = new THREE.Vector3(Math.cos(a), 0, -Math.sin(a));
-  const dir = new THREE.Vector3(
-    horiz.x * Math.cos(LAT),
-    Math.sin(LAT),
-    horiz.z * Math.cos(LAT)
-  );
-  return dir.normalize();
-}
-
-function moonPosFor(angleDeg){
-  const a = angleDeg * Math.PI/180;
-  return new THREE.Vector3(Math.cos(a)*orbitR, 0, -Math.sin(a)*orbitR);
-}
-
-// 地球から見た月用のカメラ姿勢（'earth'メインビュー & ワイプ共通）
-function earthViewCamPos(angleDeg){
-  const obsDir = observerDirFor(angleDeg);
-  const obsPos = obsDir.clone().multiplyScalar(1.4);
-  return obsPos.clone()
-    .add(obsDir.clone().multiplyScalar(-0.25))
-    .add(new THREE.Vector3(0, -1.6, 0));
-}
-
-function updateScene(){
-  const mp = moonPosFor(angle);
-  moonPivot.position.copy(mp);
-
-  // ★ 潮汐ロック：ピボットを地球(原点)に向ける → 常に同じ面が地球側
-  moonPivot.lookAt(0, 0, 0);
-
-  const name = phaseName(angle);
-  const badge = document.getElementById('badge');
-  if(name){
-    badge.style.display = '';
-    badge.firstChild.textContent = name;
-    document.getElementById('badge-sub').textContent = (mode==='earth') ? '地球から見た月' : '俯瞰視点';
-  } else {
-    badge.style.display = 'none';
+// 星空背景
+function createStarField(count, radius) {
+  const geo = new THREE.BufferGeometry();
+  const positions = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    const r = radius * (0.6 + Math.random()*0.4);
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2*Math.random() - 1);
+    positions[i*3]   = r * Math.sin(phi) * Math.cos(theta);
+    positions[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
+    positions[i*3+2] = r * Math.cos(phi);
   }
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const mat = new THREE.PointsMaterial({ color: 0xffffff, size: radius*0.0015, sizeAttenuation:true });
+  return new THREE.Points(geo, mat);
 }
 
-// ---- ワイプ（地球から見た月）カメラの更新 ----
-function updatePipCamera(){
-  const mp = moonPosFor(angle);
-  pipCam.position.copy(earthViewCamPos(angle));
-  pipCam.up.set(0,1,0);
-  pipCam.lookAt(mp);
-  const w = pipWrap.clientWidth, h = pipWrap.clientHeight;
-  if(w>0 && h>0){
-    pipCam.aspect = w/h;
-    pipCam.updateProjectionMatrix();
-  }
-}
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.rotateSpeed = 0.6;
+controls.zoomSpeed = 1.0;
 
-let controls = null;
-function buildControls(){
-  if(controls){ controls.dispose(); }
-  controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.08;
-  controls.enablePan = false;
-  controls.rotateSpeed = 0.6;
-  controls.zoomSpeed = 0.7;
+// ============================================================
+// テクスチャ（GitHub上の画像を読み込み）
+// ============================================================
+const textureLoader = new THREE.TextureLoader();
+textureLoader.setCrossOrigin('anonymous');
 
-  if(mode==='top' || mode==='both'){
-    // 俯瞰：水平回転（方位角）は自由、上下（極角）は真上付近にゆるく制限
-    controls.minPolarAngle = 0.05;            // ほぼ真上
-    controls.maxPolarAngle = Math.PI * 0.45;  // 斜め見下ろしまで許可
-    controls.enableZoom = true;
-  } else {
-    controls.minPolarAngle = 0;
-    controls.maxPolarAngle = Math.PI;
-  }
-}
+const TEX_BASE = 'https://raw.githubusercontent.com/sorafjah/earth-moon-sun/main/';
+const earthTex = textureLoader.load(TEX_BASE + 'earth1024.jpg');
+const moonTex  = textureLoader.load(TEX_BASE + 'moon1024.jpg');
+const sunTex   = textureLoader.load(TEX_BASE + 'sun1024.jpg');
+[earthTex, moonTex, sunTex].forEach(tex => {
+  tex.colorSpace = THREE.SRGBColorSpace;
+});
 
-function setCamera(keepOrbit){
-  const mp = moonPosFor(angle);
-  if(mode==='top' || mode==='both'){
-    camera = orthoCam;
-    if(!keepOrbit){
-      camera.position.set(0, 13, 0.001);
-      camera.up.set(0,1,0); // OrbitControlsの方位角回転を効かせるため up は +Y
+// 月のテクスチャを経度方向に180°回転（東西反転）
+moonTex.wrapS = THREE.RepeatWrapping;
+moonTex.offset.x = 0.5;
+
+// ============================================================
+// ライト
+// ============================================================
+const ambient = new THREE.AmbientLight(0xffffff, 0.35);
+scene.add(ambient);
+
+// ============================================================
+// オブジェクト管理
+// ============================================================
+let earthMesh, moonMesh, sunMesh, sunLight, stars;
+let currentMode = 'size'; // 'size' or 'distance'
+
+// 大きさ比較モードでの表示・非表示状態（デフォルトは地球のみ表示）
+const visState = { earth: true, moon: false, sun: false, info: false };
+
+function clearScene() {
+  // CSS2Dラベルのdom要素を明示的に削除（残留防止）
+  scene.traverse((obj) => {
+    if (obj.isCSS2DObject && obj.element && obj.element.parentNode) {
+      obj.element.parentNode.removeChild(obj.element);
     }
-  } else {
-    camera = perspCam;
-    if(!keepOrbit){
-      camera.position.copy(earthViewCamPos(angle));
-      camera.up.copy(new THREE.Vector3(0,1,0));
+  });
+  while (scene.children.length > 0) {
+    const obj = scene.children[0];
+    scene.remove(obj);
+    if (obj.geometry) obj.geometry.dispose();
+    if (obj.material) {
+      if (Array.isArray(obj.material)) obj.material.forEach(m=>m.dispose());
+      else obj.material.dispose();
     }
   }
-  updateCamProjection();
-  buildControls();
-  controls.target.copy(mode==='earth' ? mp : new THREE.Vector3(0,0,0));
-  if(!keepOrbit){ camera.lookAt(controls.target); }
+  scene.add(ambient);
+}
+
+function makeSphere(radius, texture, emissive) {
+  const geo = new THREE.SphereGeometry(radius, 64, 48);
+  const mat = emissive
+    ? new THREE.MeshBasicMaterial({ map: texture })
+    : new THREE.MeshStandardMaterial({ map: texture, roughness: 0.9, metalness: 0.0 });
+  return new THREE.Mesh(geo, mat);
+}
+
+// ------------------------------------------------------------
+// モード1: 大きさ比較（実際の比率のまま、近くに並べる）
+// ------------------------------------------------------------
+function buildSizeMode() {
+  clearScene();
+
+  // スケール: 1 unit = 2000km とする（地球が半径3.18くらいになる）
+  const SCALE = 2000;
+  const rEarth = REAL.earthRadius / SCALE;   // ≈3.19
+  const rMoon  = REAL.moonRadius / SCALE;    // ≈0.87
+  const rSun   = REAL.sunRadius / SCALE;     // ≈348
+
+  // 太陽は巨大なので、見やすいように少し離して配置
+  // 地球と月は隙間をあけて並べる
+  earthMesh = makeSphere(rEarth, earthTex, false);
+  earthMesh.position.set(0, 0, 0);
+  scene.add(earthMesh);
+
+  moonMesh = makeSphere(rMoon, moonTex, false);
+  moonMesh.position.set(rEarth + rMoon + 3, 0, 0);
+  scene.add(moonMesh);
+
+  sunMesh = makeSphere(rSun, sunTex, true);
+  // 太陽は地球より遥かに大きいので、左側にやや離して配置
+  sunMesh.position.set(-(rEarth + rSun + 40), 0, 0);
+  scene.add(sunMesh);
+
+  // 太陽から照らす平行光源 + 太陽自体は自照
+  sunLight = new THREE.PointLight(0xffffff, 2.5, 0, 0);
+  sunLight.position.copy(sunMesh.position);
+  scene.add(sunLight);
+
+  // 星空
+  stars = createStarField(3000, rSun * 6);
+  scene.add(stars);
+
+  // 表示・非表示の状態を反映
+  earthMesh.visible = visState.earth;
+  moonMesh.visible = visState.moon;
+  sunMesh.visible = visState.sun;
+  document.querySelectorAll('.sizeOnly').forEach(el => el.classList.remove('hidden'));
+  document.getElementById('infoPanel').style.display = visState.info ? '' : 'none';
+
+  // カメラ位置: 地球が見やすい位置から開始
+  camera.position.set(0, rEarth*0.6, rEarth*3.8);
+  controls.target.set(0, 0, 0);
+  controls.minDistance = rEarth*0.5;
+  controls.maxDistance = rSun * 4;
   controls.update();
-  updatePipCamera();
+
+  updateInfoForSize();
 }
 
-function updateCamProjection(){
-  const w = wrap.clientWidth, h = wrap.clientHeight;
-  const aspect = w/h;
-  if(camera === orthoCam){
-    const viewSize = 14;
-    orthoCam.left = -viewSize*aspect/2;
-    orthoCam.right = viewSize*aspect/2;
-    orthoCam.top = viewSize/2;
-    orthoCam.bottom = -viewSize/2;
-    orthoCam.updateProjectionMatrix();
-  } else {
-    perspCam.aspect = aspect;
-    perspCam.updateProjectionMatrix();
-  }
+// ------------------------------------------------------------
+// モード2: 距離比較（実際の比率で配置）
+// ------------------------------------------------------------
+function buildDistanceMode() {
+  clearScene();
+
+  // 大きさ比較モード専用の地球・月・太陽の表示切替は隠す。説明欄は切替可能（デフォルト非表示）。
+  document.querySelectorAll('.sizeOnly').forEach(el => el.classList.add('hidden'));
+  document.getElementById('infoPanel').style.display = visState.info ? '' : 'none';
+
+  // スケール: 1 unit = 6371km（地球半径=1）にする
+  const SCALE = REAL.earthRadius;
+  const rEarth = 1;
+  const rMoon  = REAL.moonRadius / SCALE;     // ≈0.273
+  const rSun   = REAL.sunRadius / SCALE;      // ≈109.2
+
+  const distMoon = REAL.earthMoonDist / SCALE; // ≈60.3
+  const distSun  = REAL.earthSunDist / SCALE;  // ≈23481
+
+  earthMesh = makeSphere(rEarth, earthTex, false);
+  earthMesh.position.set(0, 0, 0);
+  scene.add(earthMesh);
+
+  moonMesh = makeSphere(rMoon, moonTex, false);
+  moonMesh.position.set(distMoon, 0, 0);
+  scene.add(moonMesh);
+
+  sunMesh = makeSphere(rSun, sunTex, true);
+  // 太陽は反対方向（-X）に配置し、地球-月-太陽が一直線にならないよう少しYずらし軌道線で表現
+  sunMesh.position.set(-distSun, 0, 0);
+  scene.add(sunMesh);
+
+  sunLight = new THREE.PointLight(0xffffff, 2.5, 0, 0);
+  sunLight.position.copy(sunMesh.position);
+  scene.add(sunLight);
+
+  stars = createStarField(5000, distSun * 1.5);
+  scene.add(stars);
+
+  // ラベル（太陽・地球・月）
+  const labelOffset = (distSun + distMoon) * 0.012; // 全体スケールに応じた一定オフセット
+  const sunLabel = makeLabel('太陽');
+  sunLabel.position.set(0, rSun + labelOffset, 0);
+  sunMesh.add(sunLabel);
+
+  const earthLabel = makeLabel('地球');
+  earthLabel.position.set(0, labelOffset, 0);
+  earthMesh.add(earthLabel);
+
+  const moonLabel = makeLabel('月', true);
+  moonLabel.position.set(0, -labelOffset, 0);
+  moonMesh.add(moonLabel);
+
+  // カメラ初期位置：太陽から月までの全体が画面に収まるように
+  // 配置範囲は X方向に -distSun（太陽）〜 +distMoon（月）。中点を注視点にする。
+  const spanX = distSun + distMoon;           // 全体の横幅
+  const midX = (-distSun + distMoon) / 2;      // 中点
+  // 視野角50°、横幅spanXが収まるのに必要なカメラ距離（余裕をもたせる）
+  const fovRad = camera.fov * Math.PI / 180;
+  const aspect = camera.aspect;
+  // 横幅基準・縦幅基準の両方を満たす距離を取り、安全係数1.15
+  const distForWidth  = (spanX / 2) / (Math.tan(fovRad / 2) * aspect);
+  const camDist = distForWidth * 1.15;
+  camera.position.set(midX, camDist * 0.25, camDist);
+  controls.target.set(midX, 0, 0);
+  controls.minDistance = rEarth * 1.2;
+  controls.maxDistance = spanX * 2;
+  controls.update();
+
+  updateInfoForDistance();
 }
 
-const slider = document.getElementById('slider');
-function setAngle(a){
-  angle = ((a % 360) + 360) % 360;
-  slider.value = angle;
-  updateScene();
-  if(controls){
-    const mp = moonPosFor(angle);
-    if(mode==='earth'){
-      controls.target.copy(mp);
-      controls.update();
-    }
-  }
-  updatePipCamera();
-}
-slider.addEventListener('input', ()=>{
-  setAngle(parseInt(slider.value));
-});
-
-// ---- 表示モード切り替え：俯瞰で見る → 地球から見る → 両方見る → ... ----
-const viewBtn = document.getElementById('viewBtn');
-const pip = document.getElementById('pip');
-const modeOrder = ['top','earth','both'];
-const nextLabel = { top: '地球から見る', earth: '両方見る', both: '俯瞰で見る' };
-
-function applyMode(){
-  viewBtn.textContent = nextLabel[mode];
-  pip.classList.toggle('show', mode === 'both');
-  updateScene();
-  setCamera(false);
+// ============================================================
+// 情報パネル更新
+// ============================================================
+function fmt(num) {
+  return num.toLocaleString('ja-JP', {maximumFractionDigits: 1});
 }
 
-viewBtn.addEventListener('click', ()=>{
-  const idx = modeOrder.indexOf(mode);
-  mode = modeOrder[(idx+1) % modeOrder.length];
-  applyMode();
-});
-
-document.getElementById('resetBtn').addEventListener('click', ()=>{
-  setCamera(false);
-});
-
-function resize(){
-  const w = wrap.clientWidth, h = wrap.clientHeight;
-  renderer.setSize(w,h);
-  updateCamProjection();
-
-  const pw = pipWrap.clientWidth, ph = pipWrap.clientHeight;
-  if(pw>0 && ph>0){
-    pipRenderer.setSize(pw,ph);
-    pipCam.aspect = pw/ph;
-    pipCam.updateProjectionMatrix();
-  }
+function updateInfoForSize() {
+  document.getElementById('infoTitle').classList.remove('distance');
+  document.getElementById('infoTitle').textContent = '大きさ比較モード';
+  document.getElementById('infoText').textContent =
+    '地球・月・太陽を、実際の半径の比率を保ったまま近くに並べています。';
+  document.getElementById('dataRow').innerHTML = `
+    <div class="dataItem">地球 半径: <b>${fmt(REAL.earthRadius)} km</b></div>
+    <div class="dataItem">月 半径: <b>${fmt(REAL.moonRadius)} km</b>（地球の約${(REAL.earthRadius/REAL.moonRadius).toFixed(1)}分の1）</div>
+    <div class="dataItem">太陽 半径: <b>${fmt(REAL.sunRadius)} km</b>（地球の約${(REAL.sunRadius/REAL.earthRadius).toFixed(0)}倍）</div>
+  `;
 }
-window.addEventListener('resize', resize);
 
-function animate(){
+function updateInfoForDistance() {
+  document.getElementById('infoTitle').classList.add('distance');
+  document.getElementById('infoTitle').textContent = '距離比較モード';
+  document.getElementById('infoText').textContent =
+    '実際の比率のまま月・太陽までの距離と大きさを再現しています。';
+  document.getElementById('dataRow').innerHTML = `
+    <div class="dataItem">地球-月の距離: <b>約${fmt(REAL.earthMoonDist)} km</b></div>
+    <div class="dataItem">地球-太陽の距離: <b>約${fmt(REAL.earthSunDist)} km</b></div>
+    <div class="dataItem">太陽までの距離は月までの約${(REAL.earthSunDist/REAL.earthMoonDist).toFixed(0)}倍</div>
+  `;
+}
+
+// ============================================================
+// 自転・公転アニメーション
+// ============================================================
+let t = 0;
+function animate() {
   requestAnimationFrame(animate);
-  if(controls) controls.update();
+  t += 0.005;
 
-  if(mode === 'both'){
-    // メイン：俯瞰ビュー（地球・軌道線を表示）
-    earth.visible = true;
-    orbit.visible = true;
-    renderer.render(scene, camera);
-
-    // ワイプ：地球から見た月（地球本体・軌道線は非表示）
-    earth.visible = false;
-    orbit.visible = false;
-    pipRenderer.render(scene, pipCam);
-  } else {
-    earth.visible = (mode === 'top');
-    orbit.visible = (mode === 'top');
-    renderer.render(scene, camera);
-  }
+  controls.update();
+  renderer.render(scene, camera);
+  labelRenderer.render(scene, camera);
 }
-resize(); updateScene(); setCamera(false); animate();
+
+// ============================================================
+// イベント
+// ============================================================
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  labelRenderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+document.getElementById('btnSize').addEventListener('click', () => {
+  if (currentMode === 'size') return;
+  currentMode = 'size';
+  document.getElementById('btnSize').classList.add('active');
+  document.getElementById('btnDistance').classList.remove('active');
+  buildSizeMode();
+});
+
+document.getElementById('btnDistance').addEventListener('click', () => {
+  if (currentMode === 'distance') return;
+  currentMode = 'distance';
+  document.getElementById('btnDistance').classList.add('active');
+  document.getElementById('btnSize').classList.remove('active');
+  buildDistanceMode();
+});
+
+document.getElementById('btnReset').addEventListener('click', () => {
+  if (currentMode === 'size') buildSizeMode();
+  else buildDistanceMode();
+});
+
+// 大きさ比較モード: 地球・月・太陽・説明の表示切替
+document.querySelectorAll('.toggleChip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    const key = chip.dataset.obj;
+    visState[key] = !visState[key];
+    chip.classList.toggle('active', visState[key]);
+
+    switch (key) {
+      case 'earth':
+        if (earthMesh) earthMesh.visible = visState.earth;
+        break;
+      case 'moon':
+        if (moonMesh) moonMesh.visible = visState.moon;
+        break;
+      case 'sun':
+        if (sunMesh) sunMesh.visible = visState.sun;
+        break;
+      case 'info':
+        document.getElementById('infoPanel').style.display = visState.info ? '' : 'none';
+        break;
+    }
+  });
+});
+
+// ヒントを数秒後にフェードアウト
+setTimeout(() => {
+  document.getElementById('hint').classList.add('hidden');
+}, 4000);
+
+// ============================================================
+// 初期化
+// ============================================================
+buildSizeMode();
+document.getElementById('loading').style.display = 'none';
+animate();
 </script>
 </body>
 </html>
