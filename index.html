@@ -122,6 +122,11 @@ const moonTex  = texLoader.load('moon1024.jpg');
 earthTex.colorSpace = THREE.SRGBColorSpace;
 moonTex.colorSpace  = THREE.SRGBColorSpace;
 
+// ★ 月テクスチャの水平反転（東西鏡像を補正）
+moonTex.wrapS = THREE.RepeatWrapping;
+moonTex.repeat.x = -1;
+moonTex.offset.x = 1;
+  
 // ---- 太陽の光：右(+X) ----
 const sunLight = new THREE.DirectionalLight(0xffffff, 2.2);
 sunLight.position.set(50, 0, 0);
