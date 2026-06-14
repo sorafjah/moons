@@ -154,7 +154,7 @@ moonPivot.add(moon);
 // そのままだと画像の左右端（裏側）が地球側を向いてしまう。
 // Y軸に90°回転させることで、画像中心（表側＝ティコ等の高地クレーター＝「へそ」を含む面）
 // が地球側（lookAt後のローカル -Z 方向）にくるようにする。
-moon.rotation.set(0, Math.PI / 2, 0);
+moon.rotation.set(0, -Math.PI / 2, 0);
 
 const orbitR = 5.0;
 const orbit = new THREE.Mesh(
