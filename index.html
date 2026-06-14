@@ -82,7 +82,7 @@
 <body>
 <div id="app">
   <div id="canvas-wrap">
-    <div class="badge" id="badge">新月<span class="sub" id="badge-sub">上から見た図</span></div>
+    <div class="badge" id="badge">新月<span class="sub" id="badge-sub">俯瞰視点</span></div>
     <button class="view-toggle" id="viewBtn">地球から見る</button>
     <button class="reset-btn" id="resetBtn">視点リセット</button>
     <div class="sun-label" id="sunLabel"><span class="arrow">←</span>太陽<br>（光）</div>
@@ -110,13 +110,11 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 wrap.appendChild(renderer.domElement);
 
-// 地球視点用（透視投影）
 const perspCam = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
-// 俯瞰用（正射影：距離で大きさが変わらない）
 const orthoCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000);
 let camera = orthoCam;
 
-// ---- テクスチャ読み込み（コードと同じ場所に earth1024.jpg / moon1024.jpg を置く） ----
+// ---- テクスチャ ----
 const texLoader = new THREE.TextureLoader();
 texLoader.setCrossOrigin('anonymous');
 const earthTex = texLoader.load('earth1024.jpg');
@@ -124,9 +122,9 @@ const moonTex  = texLoader.load('moon1024.jpg');
 earthTex.colorSpace = THREE.SRGBColorSpace;
 moonTex.colorSpace  = THREE.SRGBColorSpace;
 
-// ---- 太陽の光：右(+X)から真横に当たる平行光 ----
+// ---- 太陽の光：右(+X) ----
 const sunLight = new THREE.DirectionalLight(0xffffff, 2.2);
-sunLight.position.set(50, 0, 0);   // 真右
+sunLight.position.set(50, 0, 0);
 sunLight.target.position.set(0, 0, 0);
 scene.add(sunLight);
 scene.add(sunLight.target);
@@ -139,15 +137,22 @@ const earth = new THREE.Mesh(
 );
 scene.add(earth);
 
-// ---- 月 ----
+// ---- 月：潮汐ロックの向き調整用にピボットでくるむ ----
+// moonPivot を地球に向ける。moonMesh 側に「おなじみの面」を出すローカル回転を入れる。
 const moonRadius = 0.55;
+const moonPivot = new THREE.Object3D();
+scene.add(moonPivot);
 const moon = new THREE.Mesh(
   new THREE.SphereGeometry(moonRadius, 48, 48),
   new THREE.MeshStandardMaterial({ map: moonTex, roughness: 1.0 })
 );
-scene.add(moon);
+moonPivot.add(moon);
 
-// 月の軌道リング（俯瞰時のガイド）
+// ★ 月テクスチャの向き合わせ（満月のとき地球から見て、おなじみの模様の向きになるよう調整）
+// lookAt 後、ピボットの -Z が地球を向く。地球から見える面が手前に来るよう月メッシュを回す。
+// ここの3値を変えると見える模様の向きを微調整できる（X:上下反転, Y:左右, Z:回転）
+moon.rotation.set(0, Math.PI, 0);
+
 const orbitR = 5.0;
 const orbit = new THREE.Mesh(
   new THREE.RingGeometry(orbitR - 0.02, orbitR + 0.02, 96),
@@ -156,7 +161,6 @@ const orbit = new THREE.Mesh(
 orbit.rotation.x = -Math.PI / 2;
 scene.add(orbit);
 
-// 星
 const starGeo = new THREE.BufferGeometry();
 const starPos = [];
 for (let i=0;i<400;i++){
@@ -165,9 +169,8 @@ for (let i=0;i<400;i++){
 starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos,3));
 scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({color:0x8899bb,size:0.18})));
 
-// ---- フェーズ定義 ----
-let angle = 0;   // 0=新月, 90=上弦, 180=満月, 270=下弦（連続値）
-let mode = 'top'; // 'top' or 'earth'
+let angle = 0;
+let mode = 'top'; // 'top'(俯瞰) or 'earth'
 
 function phaseName(a){
   a = ((a % 360) + 360) % 360;
@@ -179,7 +182,7 @@ function phaseName(a){
   return '';
 }
 
-const LAT = 35 * Math.PI/180; // 北緯35度
+const LAT = 35 * Math.PI/180;
 
 function observerDirFor(angleDeg){
   const a = angleDeg * Math.PI/180;
@@ -199,24 +202,22 @@ function moonPosFor(angleDeg){
 
 function updateScene(){
   const mp = moonPosFor(angle);
-  moon.position.copy(mp);
+  moonPivot.position.copy(mp);
 
-  // ★ 潮汐ロック：月は常に同じ面を地球(原点)に向ける
-  // 自転＝公転で、月の決まった半球が地球側を向く
-  moon.lookAt(0, 0, 0);
+  // ★ 潮汐ロック：ピボットを地球(原点)に向ける → 常に同じ面が地球側
+  moonPivot.lookAt(0, 0, 0);
 
   const name = phaseName(angle);
   const badge = document.getElementById('badge');
   if(name){
     badge.style.display = '';
     badge.firstChild.textContent = name;
-    document.getElementById('badge-sub').textContent = mode==='top' ? '上から見た図' : '地球から見た月';
+    document.getElementById('badge-sub').textContent = mode==='top' ? '俯瞰視点' : '地球から見た月';
   } else {
     badge.style.display = 'none';
   }
 }
 
-// ---- OrbitControls（自分は止まって天体模型を回すイメージ） ----
 let controls = null;
 function buildControls(){
   if(controls){ controls.dispose(); }
@@ -226,6 +227,16 @@ function buildControls(){
   controls.enablePan = false;
   controls.rotateSpeed = 0.6;
   controls.zoomSpeed = 0.7;
+
+  if(mode==='top'){
+    // 俯瞰：水平回転（方位角）は自由、上下（極角）は真上付近にゆるく制限
+    controls.minPolarAngle = 0.05;            // ほぼ真上
+    controls.maxPolarAngle = Math.PI * 0.45;  // 斜め見下ろしまで許可
+    controls.enableZoom = true;
+  } else {
+    controls.minPolarAngle = 0;
+    controls.maxPolarAngle = Math.PI;
+  }
 }
 
 function setCamera(keepOrbit){
@@ -234,7 +245,7 @@ function setCamera(keepOrbit){
     camera = orthoCam;
     if(!keepOrbit){
       camera.position.set(0, 13, 0.001);
-      camera.up.set(0,0,-1);
+      camera.up.set(0,1,0); // OrbitControlsの方位角回転を効かせるため up は +Y
     }
     orbit.visible = true;
     earth.visible = true;
@@ -254,7 +265,6 @@ function setCamera(keepOrbit){
   }
   updateCamProjection();
   buildControls();
-  // 注視点：俯瞰は原点、地球視点は月
   controls.target.copy(mode==='top' ? new THREE.Vector3(0,0,0) : mp);
   if(!keepOrbit){ camera.lookAt(controls.target); }
   controls.update();
@@ -276,13 +286,11 @@ function updateCamProjection(){
   }
 }
 
-// ---- イベント ----
 const slider = document.getElementById('slider');
 function setAngle(a){
   angle = ((a % 360) + 360) % 360;
   slider.value = angle;
   updateScene();
-  // スライダー操作中はカメラ向きを保持（地球視点だけは月を追う）
   if(controls){
     const mp = moonPosFor(angle);
     if(mode==='earth'){
@@ -298,7 +306,7 @@ slider.addEventListener('input', ()=>{
 const viewBtn = document.getElementById('viewBtn');
 viewBtn.addEventListener('click', ()=>{
   mode = mode==='top' ? 'earth' : 'top';
-  viewBtn.textContent = mode==='top' ? '地球から見る' : '上から見る';
+  viewBtn.textContent = mode==='top' ? '地球から見る' : '俯瞰で見る';
   updateScene(); setCamera(false);
 });
 
