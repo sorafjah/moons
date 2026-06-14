@@ -122,11 +122,6 @@ const moonTex  = texLoader.load('moon1024.jpg');
 earthTex.colorSpace = THREE.SRGBColorSpace;
 moonTex.colorSpace  = THREE.SRGBColorSpace;
 
-// ★ 月テクスチャの水平反転（東西鏡像を補正）
-moonTex.wrapS = THREE.RepeatWrapping;
-moonTex.repeat.x = -1;
-moonTex.offset.x = 1;
-  
 // ---- 太陽の光：右(+X) ----
 const sunLight = new THREE.DirectionalLight(0xffffff, 2.2);
 sunLight.position.set(50, 0, 0);
@@ -154,9 +149,12 @@ const moon = new THREE.Mesh(
 moonPivot.add(moon);
 
 // ★ 月テクスチャの向き合わせ
-// SphereGeometry の経度0°は元々 +Z 側。lookAt後はピボットの -Z が地球を向くので、
-// 表側中心を地球向き(-Z)にするため Y を 0 に（裏返さない）。
-moon.rotation.set(0, Math.PI, 0);
+// moon1024.jpg は「画像の中心(U=0.5)が地球側の正面」になる標準的な等距円筒図法。
+// SphereGeometry はデフォルトで U=0.5 が -Z 方向（経度0°が +Z 側）に来るため、
+// そのままだと画像の左右端（裏側）が地球側を向いてしまう。
+// Y軸に90°回転させることで、画像中心（表側＝ティコ等の高地クレーター＝「へそ」を含む面）
+// が地球側（lookAt後のローカル -Z 方向）にくるようにする。
+moon.rotation.set(0, Math.PI / 2, 0);
 
 const orbitR = 5.0;
 const orbit = new THREE.Mesh(
