@@ -32,24 +32,6 @@
   }
   .badge .sub { font-size: 12px; font-weight: 500; color: var(--sub); display:block; margin-top:2px; }
 
-  .view-toggle {
-    position: absolute; top: calc(12px + env(safe-area-inset-top)); right: 12px;
-    background: #000; color: #fff;
-    border: 1px solid #333; border-radius: 12px; padding: 10px 16px;
-    font-size: 14px; font-weight: 800; cursor: pointer;
-    font-family: inherit;
-  }
-  .view-toggle:active { transform: scale(.96); }
-
-  .reset-btn {
-    position: absolute; top: calc(64px + env(safe-area-inset-top)); right: 12px;
-    background: rgba(20,27,46,0.82); color: var(--sub);
-    border: 1px solid var(--line); border-radius: 10px; padding: 7px 12px;
-    font-size: 12px; font-weight: 700; cursor: pointer;
-    font-family: inherit;
-  }
-  .reset-btn:active { transform: scale(.96); }
-
   .sun-label {
     position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
     color: var(--accent); font-size: 13px; font-weight: 700; text-align: center;
@@ -57,11 +39,50 @@
   }
   .sun-label .arrow { font-size: 22px; display:block; }
 
+  /* ---- ワイプ（PinP）：両方見るモードで右上に表示 ---- */
+  .pip {
+    position: absolute; top: calc(12px + env(safe-area-inset-top)); right: 12px;
+    width: 34%; max-width: 220px; max-height: 32vh; aspect-ratio: 1 / 1;
+    border-radius: 14px; overflow: hidden;
+    border: 1px solid var(--line);
+    background: #05070f;
+    box-shadow: 0 4px 18px rgba(0,0,0,.5);
+    visibility: hidden;
+    transition: opacity .15s ease;
+  }
+  .pip.show { visibility: visible; }
+  .pip canvas { display:block; width:100%; height:100%; }
+  .pip-label {
+    position: absolute; top: 6px; left: 8px; right: 8px;
+    font-size: 11px; font-weight: 700; color: var(--sub);
+    background: rgba(10,14,26,0.65); padding: 3px 8px; border-radius: 8px;
+    pointer-events: none; text-align: center;
+  }
+
   #controls {
     background: var(--panel); border-top: 1px solid var(--line);
     padding: 14px 14px calc(12px + env(safe-area-inset-bottom));
     display: flex; flex-direction: column; gap: 12px;
   }
+  .view-controls {
+    display: flex; justify-content: center; align-items: center; gap: 10px;
+  }
+  .view-toggle {
+    background: #000; color: #fff;
+    border: 1px solid #333; border-radius: 12px; padding: 10px 18px;
+    font-size: 14px; font-weight: 800; cursor: pointer;
+    font-family: inherit;
+  }
+  .view-toggle:active { transform: scale(.96); }
+
+  .reset-btn {
+    background: rgba(255,255,255,0.06); color: var(--sub);
+    border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px;
+    font-size: 13px; font-weight: 700; cursor: pointer;
+    font-family: inherit;
+  }
+  .reset-btn:active { transform: scale(.96); }
+
   #slider {
     -webkit-appearance: none; appearance: none; width: 100%; height: 8px;
     border-radius: 6px; background: linear-gradient(90deg, #15294d, #3a7bd5);
@@ -83,11 +104,17 @@
 <div id="app">
   <div id="canvas-wrap">
     <div class="badge" id="badge">新月<span class="sub" id="badge-sub">俯瞰視点</span></div>
-    <button class="view-toggle" id="viewBtn">地球から見る</button>
-    <button class="reset-btn" id="resetBtn">視点リセット</button>
     <div class="sun-label" id="sunLabel"><span class="arrow">←</span>太陽<br>（光）</div>
+    <div class="pip" id="pip">
+      <div class="pip-label">地球から見た月</div>
+      <canvas id="pip-canvas"></canvas>
+    </div>
   </div>
   <div id="controls">
+    <div class="view-controls">
+      <button class="view-toggle" id="viewBtn">地球から見る</button>
+      <button class="reset-btn" id="resetBtn">視点リセット</button>
+    </div>
     <input type="range" id="slider" min="0" max="360" value="0" step="1">
   </div>
 </div>
@@ -109,6 +136,13 @@ scene.background = new THREE.Color(0x0a0e1a);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 wrap.appendChild(renderer.domElement);
+
+// ---- ワイプ（PinP）用レンダラー ----
+const pipWrap = document.getElementById('pip');
+const pipCanvas = document.getElementById('pip-canvas');
+const pipRenderer = new THREE.WebGLRenderer({ antialias: true, canvas: pipCanvas });
+pipRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const pipCam = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
 
 const perspCam = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
 const orthoCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000);
@@ -152,7 +186,7 @@ moonPivot.add(moon);
 // moon1024.jpg は「画像の中心(U=0.5)が地球側の正面」になる標準的な等距円筒図法。
 // SphereGeometry はデフォルトで U=0.5 が -Z 方向（経度0°が +Z 側）に来るため、
 // そのままだと画像の左右端（裏側）が地球側を向いてしまう。
-// Y軸に90°回転させることで、画像中心（表側＝ティコ等の高地クレーター＝「へそ」を含む面）
+// Y軸回転で、画像中心付近（表側＝ティコ等の高地クレーターを含む面）
 // が地球側（lookAt後のローカル -Z 方向）にくるようにする。
 moon.rotation.set(0, -Math.PI / 2, 0);
 
@@ -173,7 +207,7 @@ starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos,3));
 scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({color:0x8899bb,size:0.18})));
 
 let angle = 0;
-let mode = 'top'; // 'top'(俯瞰) or 'earth'
+let mode = 'top'; // 'top'(俯瞰) | 'earth'(地球から見る) | 'both'(両方見る)
 
 function phaseName(a){
   a = ((a % 360) + 360) % 360;
@@ -203,6 +237,15 @@ function moonPosFor(angleDeg){
   return new THREE.Vector3(Math.cos(a)*orbitR, 0, -Math.sin(a)*orbitR);
 }
 
+// 地球から見た月用のカメラ姿勢（'earth'メインビュー & ワイプ共通）
+function earthViewCamPos(angleDeg){
+  const obsDir = observerDirFor(angleDeg);
+  const obsPos = obsDir.clone().multiplyScalar(1.4);
+  return obsPos.clone()
+    .add(obsDir.clone().multiplyScalar(-0.25))
+    .add(new THREE.Vector3(0, -1.6, 0));
+}
+
 function updateScene(){
   const mp = moonPosFor(angle);
   moonPivot.position.copy(mp);
@@ -215,9 +258,22 @@ function updateScene(){
   if(name){
     badge.style.display = '';
     badge.firstChild.textContent = name;
-    document.getElementById('badge-sub').textContent = mode==='top' ? '俯瞰視点' : '地球から見た月';
+    document.getElementById('badge-sub').textContent = (mode==='earth') ? '地球から見た月' : '俯瞰視点';
   } else {
     badge.style.display = 'none';
+  }
+}
+
+// ---- ワイプ（地球から見た月）カメラの更新 ----
+function updatePipCamera(){
+  const mp = moonPosFor(angle);
+  pipCam.position.copy(earthViewCamPos(angle));
+  pipCam.up.set(0,1,0);
+  pipCam.lookAt(mp);
+  const w = pipWrap.clientWidth, h = pipWrap.clientHeight;
+  if(w>0 && h>0){
+    pipCam.aspect = w/h;
+    pipCam.updateProjectionMatrix();
   }
 }
 
@@ -231,7 +287,7 @@ function buildControls(){
   controls.rotateSpeed = 0.6;
   controls.zoomSpeed = 0.7;
 
-  if(mode==='top'){
+  if(mode==='top' || mode==='both'){
     // 俯瞰：水平回転（方位角）は自由、上下（極角）は真上付近にゆるく制限
     controls.minPolarAngle = 0.05;            // ほぼ真上
     controls.maxPolarAngle = Math.PI * 0.45;  // 斜め見下ろしまで許可
@@ -244,33 +300,25 @@ function buildControls(){
 
 function setCamera(keepOrbit){
   const mp = moonPosFor(angle);
-  if(mode==='top'){
+  if(mode==='top' || mode==='both'){
     camera = orthoCam;
     if(!keepOrbit){
       camera.position.set(0, 13, 0.001);
       camera.up.set(0,1,0); // OrbitControlsの方位角回転を効かせるため up は +Y
     }
-    orbit.visible = true;
-    earth.visible = true;
   } else {
     camera = perspCam;
     if(!keepOrbit){
-      const obsDir = observerDirFor(angle);
-      const obsPos = obsDir.clone().multiplyScalar(1.4);
-      const camPos = obsPos.clone()
-        .add(obsDir.clone().multiplyScalar(-0.25))
-        .add(new THREE.Vector3(0, -1.6, 0));
-      camera.position.copy(camPos);
+      camera.position.copy(earthViewCamPos(angle));
       camera.up.copy(new THREE.Vector3(0,1,0));
     }
-    orbit.visible = false;
-    earth.visible = false;
   }
   updateCamProjection();
   buildControls();
-  controls.target.copy(mode==='top' ? new THREE.Vector3(0,0,0) : mp);
+  controls.target.copy(mode==='earth' ? mp : new THREE.Vector3(0,0,0));
   if(!keepOrbit){ camera.lookAt(controls.target); }
   controls.update();
+  updatePipCamera();
 }
 
 function updateCamProjection(){
@@ -301,16 +349,29 @@ function setAngle(a){
       controls.update();
     }
   }
+  updatePipCamera();
 }
 slider.addEventListener('input', ()=>{
   setAngle(parseInt(slider.value));
 });
 
+// ---- 表示モード切り替え：俯瞰で見る → 地球から見る → 両方見る → ... ----
 const viewBtn = document.getElementById('viewBtn');
+const pip = document.getElementById('pip');
+const modeOrder = ['top','earth','both'];
+const nextLabel = { top: '地球から見る', earth: '両方見る', both: '俯瞰で見る' };
+
+function applyMode(){
+  viewBtn.textContent = nextLabel[mode];
+  pip.classList.toggle('show', mode === 'both');
+  updateScene();
+  setCamera(false);
+}
+
 viewBtn.addEventListener('click', ()=>{
-  mode = mode==='top' ? 'earth' : 'top';
-  viewBtn.textContent = mode==='top' ? '地球から見る' : '俯瞰で見る';
-  updateScene(); setCamera(false);
+  const idx = modeOrder.indexOf(mode);
+  mode = modeOrder[(idx+1) % modeOrder.length];
+  applyMode();
 });
 
 document.getElementById('resetBtn').addEventListener('click', ()=>{
@@ -321,13 +382,35 @@ function resize(){
   const w = wrap.clientWidth, h = wrap.clientHeight;
   renderer.setSize(w,h);
   updateCamProjection();
+
+  const pw = pipWrap.clientWidth, ph = pipWrap.clientHeight;
+  if(pw>0 && ph>0){
+    pipRenderer.setSize(pw,ph);
+    pipCam.aspect = pw/ph;
+    pipCam.updateProjectionMatrix();
+  }
 }
 window.addEventListener('resize', resize);
 
 function animate(){
   requestAnimationFrame(animate);
   if(controls) controls.update();
-  renderer.render(scene, camera);
+
+  if(mode === 'both'){
+    // メイン：俯瞰ビュー（地球・軌道線を表示）
+    earth.visible = true;
+    orbit.visible = true;
+    renderer.render(scene, camera);
+
+    // ワイプ：地球から見た月（地球本体・軌道線は非表示）
+    earth.visible = false;
+    orbit.visible = false;
+    pipRenderer.render(scene, pipCam);
+  } else {
+    earth.visible = (mode === 'top');
+    orbit.visible = (mode === 'top');
+    renderer.render(scene, camera);
+  }
 }
 resize(); updateScene(); setCamera(false); animate();
 </script>
