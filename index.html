@@ -151,7 +151,7 @@ moonPivot.add(moon);
 // ★ 月テクスチャの向き合わせ
 // SphereGeometry の経度0°は元々 +Z 側。lookAt後はピボットの -Z が地球を向くので、
 // 表側中心を地球向き(-Z)にするため Y を 0 に（裏返さない）。
-moon.rotation.set(0, 0, 0);
+moon.rotation.set(0, Math.PI, 0);
 
 const orbitR = 5.0;
 const orbit = new THREE.Mesh(
